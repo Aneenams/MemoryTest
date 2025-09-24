@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Master</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; overflow: hidden; }
+        .space-background { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to right, #24243e, #302b63, #0f0c29); z-index: -1; }
+        .flying-object { position: absolute; color: rgba(255, 255, 255, 0.5); font-size: 2rem; animation: fly linear infinite; pointer-events: none; }
+        @keyframes fly { 0% { transform: translateY(100vh) rotate(0deg); opacity: 1; } 100% { transform: translateY(-100vh) rotate(720deg); opacity: 0; } }
+        .modal-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; backdrop-filter: blur(5px); z-index: 50; }
+        .modal-box { background-color: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 1.5rem; padding: 2rem; color: white; width: 90%; max-width: 500px; box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+        .mic-listening { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(233, 30, 99, 0.7); } 50% { transform: scale(1.1); box-shadow: 0 0 10px 10px rgba(233, 30, 99, 0); } }
+    </style>
+</head>
+<body>
+    <div id="space-container" class="space-background"></div>
+    <div class="relative min-h-screen flex flex-col justify-center items-center text-white p-4">
+        <div id="profile-icon" class="absolute top-5 right-5 hidden">
+            <img src="https://placehold.co/50x50/7c3aed/ffffff?text=P" alt="Profile" class="rounded-full border-2 border-purple-400">
+        </div>
+        <div id="welcome-screen" class="text-center">
+            <h1 class="text-5xl md:text-7xl font-bold mb-4 tracking-tight">Memory Master</h1>
+            <p class="text-lg md:text-xl text-gray-300 mb-8">Unleash the power of your mind.</p>
+            <button id="show-login-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-8 rounded-full text-lg transition duration-300 transform hover:scale-105">
+                Sign In / Sign Up
+            </button>
+        </div>
+        <div id="game-area" class="hidden w-full max-w-4xl text-center">
+            <h2 class="text-3xl font-bold mb-2">Current Turn: <span id="turn-indicator">Your Turn</span></h2>
+            <p id="computer-move-text" class="mb-4 text-gray-300 hidden">The computer added: <strong id="computer-word" class="text-purple-300"></strong></p>
+            <div id="sequence-display" class="bg-black bg-opacity-30 p-4 rounded-lg min-h-[60px] text-xl mb-6 flex justify-center items-center flex-wrap gap-3">
+            </div>
+            <div class="relative mt-4 flex items-center">
+                <input type="text" id="game-input" placeholder="Type or click the mic to speak..." class="w-full bg-white bg-opacity-10 border border-purple-400 rounded-full py-4 px-6 text-white text-lg focus:outline-none focus:ring-2 focus:ring-purple-400" autocomplete="off" disabled>
+                <button id="mic-btn" class="absolute right-4 p-2 rounded-full hover:bg-white/20 transition-colors">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="login-modal" class="modal-container hidden">
+        <div class="modal-box text-center">
+            <h2 class="text-3xl font-bold mb-6">Join the Challenge</h2>
+            <input id="username-input" type="text" placeholder="Username" class="w-full bg-transparent border-b-2 border-gray-400 p-2 mb-4 text-white focus:outline-none focus:border-purple-400">
+            <input id="password-input" type="password" placeholder="Password" class="w-full bg-transparent border-b-2 border-gray-400 p-2 mb-6 text-white focus:outline-none focus:border-purple-400">
+            <button id="login-btn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-8 rounded-full text-lg transition duration-300">Let's Go!</button>
+        </div>
+    </div>
+    
+    <div id="rules-modal" class="modal-container hidden">
+        <div class="modal-box">
+            <h2 class="text-3xl font-bold mb-4 text-center">Game Rules</h2>
+            <p class="text-gray-200 mb-2">1. On each turn, repeat all previous words and add one new word.</p>
+            <p class="text-gray-200 mb-2">2. Separate each word with a <strong class="text-purple-300">space</strong>. Type and press Enter, or use the mic.</p>
+            <p class="text-gray-200 mb-4">3. Multi-word items must be written as <strong class="text-purple-300">one single word</strong> (e.g., "BradPitt" or "TheDarkKnight").</p>
+            <p class="text-center font-bold text-lg mb-6">One mistake, and you're out!</p>
+            <button id="rules-next-btn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-8 rounded-full text-lg transition duration-300">Next</button>
+        </div>
+    </div>
+    
+    <div id="setup-modal" class="modal-container hidden">
+        <div class="modal-box">
+            <h2 class="text-3xl font-bold mb-6 text-center">Game Setup</h2>
+            <div class="mb-6"><label class="block mb-2 text-lg">Choose a Stream:</label><select id="stream-select" class="w-full bg-black bg-opacity-30 p-3 rounded-lg border border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-400"><option>Actors</option><option>Movies</option><option>Sports</option><option>Cars</option></select></div>
+            <div class="mb-6"><label class="block mb-2 text-lg">Choose Opponent:</label><select id="mode-select" class="w-full bg-black bg-opacity-30 p-3 rounded-lg border border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-400"><option value="vs_computer">vs. Computer</option><option value="human">vs. Human</option></select></div>
+            <div id="num-players-container" class="mb-6 hidden"><label class="block mb-2 text-lg">Number of Players:</label><select id="num-players-select" class="w-full bg-black bg-opacity-30 p-3 rounded-lg border border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-400"><option>2</option><option>3</option><option>4</option></select></div>
+            <button id="setup-next-btn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-8 rounded-full text-lg transition duration-300">Start Game</button>
+        </div>
+    </div>
+    
+    <div id="countdown-modal" class="modal-container hidden"><div class="modal-box text-center"><p class="text-2xl mb-4">Get ready...</p><h2 id="countdown-text" class="text-9xl font-bold">3</h2></div></div>
+    <div id="elimination-modal" class="modal-container hidden"><div class="modal-box text-center"><h2 id="elimination-message" class="text-3xl font-bold mb-4">Player Eliminated!</h2><p class="text-lg">The game continues...</p></div></div>
+
+    <!-- ** UPDATED GAME OVER MODAL WITH EXIT BUTTON ** -->
+    <div id="game-over-modal" class="modal-container hidden">
+        <div class="modal-box text-center">
+            <h2 class="text-3xl font-bold mb-4">Game Over!</h2>
+            <p id="game-over-message" class="text-lg mb-4"></p>
+            <div class="text-left bg-black bg-opacity-20 p-3 rounded-lg mb-2">Correct sequence: <span id="correct-sequence-display" class="font-mono"></span></div>
+            <div class="text-left bg-black bg-opacity-20 p-3 rounded-lg mb-6">Your sequence: <span id="your-sequence-display" class="font-mono"></span></div>
+            <div class="flex flex-col sm:flex-row gap-4">
+                <button id="play-again-btn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-8 rounded-full text-lg transition duration-300">Play Again</button>
+                <button id="exit-btn" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-8 rounded-full text-lg transition duration-300">Exit</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const welcomeScreen = document.getElementById('welcome-screen');
+        const gameArea = document.getElementById('game-area');
+        const profileIcon = document.getElementById('profile-icon');
+        const modals = { login: document.getElementById('login-modal'), rules: document.getElementById('rules-modal'), setup: document.getElementById('setup-modal'), countdown: document.getElementById('countdown-modal'), gameOver: document.getElementById('game-over-modal'), elimination: document.getElementById('elimination-modal') };
+        const buttons = { showLogin: document.getElementById('show-login-btn'), login: document.getElementById('login-btn'), rulesNext: document.getElementById('rules-next-btn'), setupNext: document.getElementById('setup-next-btn'), playAgain: document.getElementById('play-again-btn'), mic: document.getElementById('mic-btn'), exit: document.getElementById('exit-btn') };
+        const gameElements = { input: document.getElementById('game-input'), sequenceDisplay: document.getElementById('sequence-display'), streamSelect: document.getElementById('stream-select'), modeSelect: document.getElementById('mode-select'), numPlayersContainer: document.getElementById('num-players-container'), numPlayersSelect: document.getElementById('num-players-select'), countdownText: document.getElementById('countdown-text'), computerWord: document.getElementById('computer-word'), computerMoveText: document.getElementById('computer-move-text'), turnIndicator: document.getElementById('turn-indicator'), gameOverMessage: document.getElementById('game-over-message'), correctSequenceDisplay: document.getElementById('correct-sequence-display'), yourSequenceDisplay: document.getElementById('your-sequence-display'), eliminationMessage: document.getElementById('elimination-message') };
+        const loginInputs = {
+            username: document.getElementById('username-input'),
+            password: document.getElementById('password-input')
+        };
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition;
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.lang = 'en-US';
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                gameElements.input.value = transcript;
+                submitPlayerTurn();
+            };
+            recognition.onspeechend = () => { recognition.stop(); buttons.mic.classList.remove('mic-listening'); gameElements.turnIndicator.textContent = "Checking..."; };
+            recognition.onerror = (event) => { alert(`Speech recognition error: ${event.error}`); buttons.mic.classList.remove('mic-listening'); };
+        } else { console.log("Speech Recognition not supported."); buttons.mic.style.display = 'none'; }
+        
+        buttons.showLogin.addEventListener('click', () => modals.login.classList.remove('hidden'));
+        buttons.login.addEventListener('click', () => { modals.login.classList.add('hidden'); modals.rules.classList.remove('hidden'); profileIcon.classList.remove('hidden'); welcomeScreen.classList.add('hidden'); });
+        buttons.rulesNext.addEventListener('click', () => { modals.rules.classList.add('hidden'); modals.setup.classList.remove('hidden'); });
+        gameElements.modeSelect.addEventListener('change', (e) => { gameElements.numPlayersContainer.classList.toggle('hidden', e.target.value !== 'human'); });
+        buttons.setupNext.addEventListener('click', async () => {
+            const payload = { stream: gameElements.streamSelect.value, mode: gameElements.modeSelect.value, num_players: parseInt(gameElements.numPlayersSelect.value) };
+            try {
+                const response = await fetch('/start-game', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), });
+                const data = await response.json();
+                if (data.status === 'success') { modals.setup.classList.add('hidden'); modals.countdown.classList.remove('hidden'); startCountdown(data.first_player); } 
+                else { alert('Error starting game: ' + data.message); }
+            } catch (error) { alert('Could not connect to the server.'); }
+        });
+        gameElements.input.addEventListener('keydown', async (event) => { if (event.key === 'Enter') submitPlayerTurn(); });
+        buttons.playAgain.addEventListener('click', () => { modals.gameOver.classList.add('hidden'); modals.setup.classList.remove('hidden'); });
+        buttons.mic.addEventListener('click', () => { if (recognition) { recognition.start(); buttons.mic.classList.add('mic-listening'); gameElements.turnIndicator.textContent = "Listening..."; } });
+        
+        // ** NEW EVENT LISTENERS **
+        buttons.exit.addEventListener('click', () => {
+            modals.gameOver.classList.add('hidden');
+            gameArea.classList.add('hidden');
+            welcomeScreen.classList.remove('hidden');
+            profileIcon.classList.add('hidden');
+        });
+        loginInputs.password.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                buttons.login.click(); // Simulate a click on the login button
+            }
+        });
+
+        function startCountdown(firstPlayer) {
+            let count = 3;
+            gameElements.countdownText.innerText = count;
+            const interval = setInterval(() => {
+                count--;
+                if (count > 0) gameElements.countdownText.innerText = count;
+                else if (count === 0) gameElements.countdownText.innerText = 'Go!';
+                else { clearInterval(interval); modals.countdown.classList.add('hidden'); startGame(firstPlayer); }
+            }, 1000);
+        }
+
+        function startGame(player) {
+            gameArea.classList.remove('hidden');
+            gameElements.computerMoveText.classList.add('hidden');
+            startPlayerTurn(`${player}'s turn! Enter one word.`, []);
+        }
+
+        async function submitPlayerTurn() {
+            const playerSequence = gameElements.input.value;
+            if (!playerSequence) return;
+            gameElements.input.disabled = true;
+            buttons.mic.disabled = true;
+            gameElements.turnIndicator.textContent = "Checking...";
+            try {
+                const response = await fetch('/submit-turn', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sequence: playerSequence }), });
+                const result = await response.json();
+                if (result.status === 'success_computer_played') {
+                    gameElements.computerWord.textContent = result.new_word_from_computer;
+                    gameElements.computerMoveText.classList.remove('hidden');
+                    startPlayerTurn(`${result.next_player}'s turn!`, result.sequence);
+                } else if (result.status === 'success_human_played') {
+                    gameElements.computerMoveText.classList.add('hidden');
+                    startPlayerTurn(`${result.next_player}'s turn!`, result.sequence);
+                } else if (result.status === 'player_eliminated') {
+                    showElimination(result.eliminated_player, result.next_player, result.sequence);
+                } else if (result.status === 'game_over') {
+                    showGameOver(result.message, result.correct_sequence, result.your_sequence);
+                } else if (result.status === 'win') {
+                    showGameOver(result.message, result.sequence, []);
+                }
+            } catch (error) { alert('Server connection error.'); }
+        }
+
+        function startPlayerTurn(message, sequence) {
+            gameElements.turnIndicator.textContent = message;
+            gameElements.input.value = '';
+            gameElements.input.disabled = false;
+            buttons.mic.disabled = false;
+            gameElements.input.focus();
+            updateSequenceDisplay(sequence, true);
+            setTimeout(() => { updateSequenceDisplay(sequence, false); }, 3000);
+        }
+        
+        function showElimination(eliminatedPlayer, nextPlayer, sequence) {
+            gameElements.eliminationMessage.textContent = `${eliminatedPlayer} has been eliminated!`;
+            modals.elimination.classList.remove('hidden');
+            setTimeout(() => { modals.elimination.classList.add('hidden'); startPlayerTurn(`${nextPlayer}'s turn!`, sequence); }, 3000);
+        }
+
+        function updateSequenceDisplay(sequence, isVisible) {
+            gameElements.sequenceDisplay.innerHTML = '';
+            if (isVisible && sequence && sequence.length > 0) {
+                sequence.forEach(word => {
+                    const wordEl = document.createElement('span');
+                    wordEl.className = 'bg-purple-500 px-3 py-1 rounded-md';
+                    wordEl.textContent = word;
+                    gameElements.sequenceDisplay.appendChild(wordEl);
+                });
+            } else { gameElements.sequenceDisplay.innerHTML = `<span class="text-gray-400">Sequence hidden. It's your turn!</span>`; }
+        }
+        
+        function showGameOver(message, correctSequence, yourSequence) {
+             gameArea.classList.add('hidden');
+             modals.gameOver.classList.remove('hidden');
+             gameElements.gameOverMessage.textContent = message;
+             gameElements.correctSequenceDisplay.textContent = correctSequence.join(' ');
+             if (yourSequence && yourSequence.length > 0) {
+                gameElements.yourSequenceDisplay.parentElement.classList.remove('hidden');
+                gameElements.yourSequenceDisplay.textContent = yourSequence.join(' ');
+             } else {
+                gameElements.yourSequenceDisplay.parentElement.classList.add('hidden');
+             }
+        }
+        
+        function createFlyingObjects() {
+            const objects = ['🧠', '💡', '✨', '🚀', '⭐', '⚛️', '❓', '📚'];
+            const container = document.getElementById('space-container');
+            if (container.children.length > 0) return;
+            for (let i = 0; i < 20; i++) {
+                const obj = document.createElement('div');
+                obj.classList.add('flying-object');
+                obj.innerText = objects[Math.floor(Math.random() * objects.length)];
+                obj.style.left = `${Math.random() * 100}vw`;
+                obj.style.animationDuration = `${(Math.random() * 10) + 10}s`;
+                obj.style.animationDelay = `${Math.random() * 10}s`;
+                obj.style.fontSize = `${(Math.random() * 1.5) + 0.5}rem`;
+                container.appendChild(obj);
+            }
+        }
+        createFlyingObjects();
+    </script>
+</body>
+</html>
+
