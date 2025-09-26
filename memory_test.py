@@ -1,144 +1,146 @@
-from flask import Flask, render_template, request, jsonify, session
 import random
-import csv
-from thefuzz import fuzz, process
 
-app = Flask(__name__)
-app.secret_key = 'super-secret-key-for-memory-game'
+class MemoryGame:
+    def __init__(self):
+        """Initializes the game and loads the knowledge base directly."""
+        # The data is now inside the code, no more CSV file needed.
+        self.knowledge_base = {
+            "actors": [
+                "Mohanlal", "Mammootty", "Dulquer Salman", "Brad Pitt", "Leonardo DiCaprio",
+                "Scarlett Johansson", "Tom Cruise", "Amitabh Bachchan", "Chris Hemsworth",
+                "Emma Watson", "Shah Rukh Khan", "Prithviraj Sukumaran"
+            ],
+            "movies": [
+                "Titanic", "Inception", "Bahubali", "Avatar", "Interstellar", "The Dark Knight",
+                "Avengers", "Jurassic Park", "Spider-Man", "Forrest Gump", "Life of Pi",
+                "The Matrix", "KGF", "Drishyam", "Jawan"
+            ],
+            "sports": [
+                "Football", "Cricket", "Basketball", "Tennis", "Hockey", "Sachin Tendulkar",
+                "Lionel Messi", "Serena Williams", "Roger Federer", "Virat Kohli",
+                "Cristiano Ronaldo", "LeBron James", "MS Dhoni"
+            ],
+            "cars": [
+                "Ferrari", "BMW", "Tesla", "Audi", "Lamborghini", "Porsche", "Mercedes",
+                "Jaguar", "Ford", "Chevrolet", "Mahindra Thar", "Toyota Fortuner"
+            ]
+        }
+        self.players = []
+        self.sequence = []
+        self.current_stream = None
+        self.game_over = False
+        self.turn = 0
 
-def load_knowledge_base_from_csv(filename='streams.csv'):
-    knowledge_base = {}
-    try:
-        with open(filename, mode='r', encoding='utf-8') as infile:
-            reader = csv.reader(infile)
-            next(reader)
-            for row in reader:
-                if row:
-                    stream_name = row[0].lower()
-                    items_list = [item.strip() for item in row[1].split(',')]
-                    knowledge_base[stream_name] = items_list
-        print("✅ Knowledge base loaded successfully from streams.csv")
-    except FileNotFoundError:
-        print(f"❌ ERROR: {filename} not found! The game will not work.")
-        return {}
-    return knowledge_base
-
-KNOWLEDGE_BASE = load_knowledge_base_from_csv()
-
-def computer_turn(sequence, available_words):
-    """
-    Smarter computer turn that avoids fuzzy duplicates of words already in the sequence.
-    """
-    options = []
-    for word in available_words:
-        is_duplicate = False
-        # Check if the potential new word is too similar to anything already said
-        best_match, score = process.extractOne(word, sequence)
-        if score < 90: # Only considers it a duplicate if it's a very close match
-            options.append(word)
-            
-    if not options:
-        return "WIN"
-    return random.choice(options)
-
-@app.route('/')
-def home():
-    return render_template('index.html')
-
-@app.route('/start-game', methods=['POST'])
-def start_game():
-    data = request.get_json()
-    stream = data.get('stream', '').lower()
-    mode = data.get('mode')
-    num_players = data.get('num_players', 2)
-
-    if not stream or stream not in KNOWLEDGE_BASE:
-        return jsonify({'status': 'error', 'message': 'Invalid stream selected'}), 400
-    
-    session.clear()
-    session['current_stream'] = stream
-    session['game_sequence'] = []
-    session['stream_words'] = KNOWLEDGE_BASE[stream][:]
-    session['mode'] = mode
-
-    if mode == 'human':
-        session['players'] = [f"Player {i+1}" for i in range(num_players)]
-        session['current_player_index'] = 0
-    else:
-        session['players'] = ['Player 1', 'Computer']
-
-    return jsonify({'status': 'success', 'first_player': session['players'][0]})
-
-@app.route('/submit-turn', methods=['POST'])
-def submit_turn():
-    data = request.get_json()
-    user_input = data.get('sequence', '')
-    
-    game_sequence = session.get('game_sequence', [])
-    stream_words = session.get('stream_words', [])
-    mode = session.get('mode')
-    players = session.get('players', [])
-    current_player_index = session.get('current_player_index', 0)
-    current_player_name = players[current_player_index]
-    
-    user_list = [item.strip() for item in user_input.split(',')]
-
-    # Helper function for game over/elimination logic
-    def handle_mistake(message):
-        if len(players) > 2 and mode == 'human':
-            eliminated_player = players.pop(current_player_index)
-            session['players'] = players
-            if current_player_index >= len(players):
-                session['current_player_index'] = 0
-            return jsonify({'status': 'player_eliminated', 'eliminated_player': eliminated_player, 'next_player': players[session['current_player_index']], 'sequence': game_sequence})
+    def setup_game(self):
+        """Sets up the game settings like stream and players."""
+        print("🎮 Welcome to the Memory Master Game!\n")
+        
+        print("Available streams:", ", ".join(self.knowledge_base.keys()))
+        
+        stream_choice = input("Choose a stream: ").strip().lower()
+        if stream_choice not in self.knowledge_base:
+            print("❌ Invalid stream! Game over.")
+            self.game_over = True
+            return
+        self.current_stream = stream_choice
+        
+        mode = input("Play with (1) Humans or (2) Computer? Enter 1 or 2: ").strip()
+        if mode == '1':
+            try:
+                num_players = int(input("Enter number of players (2 or more): "))
+                if num_players < 2: raise ValueError
+                self.players = [f"Player {i+1}" for i in range(num_players)]
+            except ValueError:
+                print("❌ Invalid number. Defaulting to 2 players.")
+                self.players = ["Player 1", "Player 2"]
         else:
-            winner_index = 1 if current_player_index == 0 else 0
-            # Ensure winner_index is valid
-            if winner_index < len(players):
-                winner = players[winner_index]
-                message = f"{message} - {winner} wins!"
-            return jsonify({'status': 'game_over', 'message': message, 'correct_sequence': game_sequence, 'your_sequence': user_list})
+            player_name = input("Enter your name: ").strip() or "Player 1"
+            self.players = [player_name, "Computer"]
 
-    if len(user_list) != len(game_sequence) + 1:
-        return handle_mistake(f"{current_player_name} repeated the wrong number of items!")
+    def _computer_turn(self):
+        """Handles the computer's move."""
+        seq_lower = {item.lower() for item in self.sequence}
+        # This will now correctly use the chosen stream's word list
+        options = [item for item in self.knowledge_base[self.current_stream] if item.lower() not in seq_lower]
+        
+        if not options:
+            print(f"💻 Computer is out of unique words from the '{self.current_stream}' stream! You win!")
+            self.game_over = True
+            return
 
-    # Fuzzy match the repeated part of the sequence. This accepts nicknames.
-    for i in range(len(game_sequence)):
-        similarity_ratio = fuzz.ratio(game_sequence[i].lower(), user_list[i].lower())
-        if similarity_ratio < 75:
-            return handle_mistake(f"{current_player_name} made a mistake in the sequence!")
+        new_item = random.choice(options)
+        self.sequence.append(new_item)
+        print(f"💻 Computer adds: {new_item}")
+        print(f"✅ Current sequence: {', '.join(self.sequence)}")
 
-    new_word_from_user = user_list[-1]
+    def play_turn(self):
+        """Manages a single turn for a human or computer player."""
+        player_index = self.turn % len(self.players)
+        current_player = self.players[player_index]
+
+        print(f"\n👉 {current_player}'s turn. Current sequence length: {len(self.sequence)}")
+        
+        if current_player == "Computer":
+            self._computer_turn()
+            return
+
+        prompt = f"Repeat the sequence and add one more item (comma-separated): "
+        user_input = input(prompt).strip()
+        
+        if not user_input:
+            print(f"❌ {current_player} didn't enter anything!")
+            self._eliminate_player(current_player)
+            return
+
+        user_list = [item.strip() for item in user_input.split(',')]
+        
+        correct_sequence_lower = [item.lower() for item in self.sequence]
+        user_sequence_part_lower = [item.lower() for item in user_list[:-1]]
+        
+        if len(user_list) != len(self.sequence) + 1 or user_sequence_part_lower != correct_sequence_lower:
+            print(f"💥 Wrong sequence! The correct sequence was: {', '.join(self.sequence)}")
+            self._eliminate_player(current_player)
+        else:
+            self.sequence = user_list
+            print(f"✅ Correct! New sequence: {', '.join(self.sequence)}")
+
+    def _eliminate_player(self, player):
+        """Removes a player from the game."""
+        player_index = self.players.index(player)
+        self.players.remove(player)
+        print(f"🚫 {player} has been eliminated!")
+
+        if self.turn >= len(self.players) and len(self.players) > 0:
+            self.turn = player_index % len(self.players)
+        
+        if len(self.players) < 2:
+            self.game_over = True
+
+    def run(self):
+        """The main game loop."""
+        self.setup_game()
+        if self.game_over:
+            return
+
+        first_player = self.players[0]
+        first_item = input(f"{first_player}, start the game with one '{self.current_stream}': ").strip()
+        if not first_item:
+            print("❌ You must start with something! Game over.")
+            return
+        self.sequence.append(first_item)
+        print(f"✅ Sequence started: {', '.join(self.sequence)}")
+        
+        while not self.game_over:
+            self.turn += 1
+            self.play_turn()
+        
+        if self.players:
+            print(f"\n🏆 Congratulations, {self.players[0]} is the Memory Master!")
+        else:
+            print("\nGame over!")
+
+# To run the game:
+if __name__ == "__main__":
+    game = MemoryGame()
+    game.run()
     
-    # Check if the new word is a fuzzy duplicate of something already in the sequence
-    if game_sequence:
-        best_match_in_seq, score_in_seq = process.extractOne(new_word_from_user, game_sequence)
-        if score_in_seq >= 90:
-            return handle_mistake(f"'{new_word_from_user}' is a duplicate of '{best_match_in_seq}'!")
-
-    # --- NEW LOGIC: ACCEPT NICKNAMES/TYPOS, DON'T AUTO-CORRECT ---
-    # The new sequence is exactly what the user entered.
-    new_sequence = user_list
-    session['game_sequence'] = new_sequence
-
-    # If the user enters a word that is not a close match to any known word,
-    # add it to the list so the computer can potentially use it.
-    best_match, score = process.extractOne(new_word_from_user, stream_words)
-    if score < 75:
-        stream_words.append(new_word_from_user.title())
-        session['stream_words'] = stream_words
-    # --- END OF NEW LOGIC ---
-
-    if mode == 'vs_computer':
-        new_word_from_computer = computer_turn(new_sequence, stream_words)
-        if new_word_from_computer == "WIN":
-             return jsonify({'status': 'win', 'message': 'The computer ran out of words! You are the Memory Master!', 'sequence': new_sequence})
-        session['game_sequence'] = new_sequence + [new_word_from_computer]
-        return jsonify({'status': 'success_computer_played', 'new_word_from_computer': new_word_from_computer, 'sequence': new_sequence, 'next_player': 'Player 1'})
-    else: # Human vs Human
-        session['current_player_index'] = (current_player_index + 1) % len(players)
-        return jsonify({'status': 'success_human_played', 'sequence': new_sequence, 'next_player': players[session['current_player_index']]})
-
-if __name__ == '__main__':
-    app.run(debug=True)
-
